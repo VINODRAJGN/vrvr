@@ -1,0 +1,826 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GreenCell Mobility</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 font-sans">
+  <div id="app" class="min-h-screen">
+    <!-- Login Page -->
+    <div id="login-page" class="flex items-center justify-center min-h-screen bg-gray-200">
+      <div class="bg-white p-8 rounded-lg shadow-lg w-full max-w-md">
+        <div class="text-center mb-6">
+          <img src="logo.jpg" alt="GreenCell Logo" class="mx-auto h-16">
+          <h1 class="text-2xl font-bold mt-4">GreenCell EV Pvt Ltd</h1>
+          <h2 class="text-lg text-gray-600">Contract Manufacture Department</h2>
+        </div>
+        <div class="space-y-4">
+          <input id="username" type="text" placeholder="Username" class="w-full p-3 border rounded-lg">
+          <input id="password" type="password" placeholder="Password" class="w-full p-3 border rounded-lg">
+          <button onclick="login()" class="w-full bg-green-600 text-white p-3 rounded-lg hover:bg-green-700">Login</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="main-app" class="hidden">
+      <!-- Header -->
+      <header class="bg-white shadow-md p-4 flex items-center justify-between">
+        <div>
+          <img src="logo.jpg" alt="GreenCell Logo" class="h-12 inline-block">
+          <div class="inline-block align-middle ml-4">
+            <h1 class="text-xl font-bold">GreenCell EV Pvt Ltd</h1>
+            <h2 class="text-md text-gray-600">Contract Manufacture Department</h2>
+          </div>
+        </div>
+        <button onclick="logout()" class="bg-red-500 text-white px-4 py-2 rounded-lg">Logout</button>
+      </header>
+
+      <!-- Navigation -->
+      <nav class="bg-green-600 text-white p-4">
+        <ul class="flex space-x-6 justify-center">
+          <li><button onclick="showPage('home')" class="hover:underline">Home</button></li>
+          <li><button onclick="showPage('sop')" class="hover:underline">SOP for Maintenance</button></li>
+          <li><button onclick="showPage('retro')" class="hover:underline">Retro Summary</button></li>
+          <li><button onclick="showPage('complaints')" class="hover:underline">Complaints Summary</button></li>
+          <li><button onclick="showPage('odometer')" class="hover:underline">Odometer Summary</button></li>
+        </ul>
+      </nav>
+
+      <!-- Home Page -->
+      <div id="home-page" class="p-6">
+        <h2 class="text-2xl font-bold text-center mb-6">Project - 13.5EV Coach Bus</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full bg-white shadow-md rounded-lg">
+            <thead>
+              <tr class="bg-green-600 text-white">
+                <th class="p-3">Vehicle Registration Number</th>
+                <th class="p-3">Registration State</th>
+                <th class="p-3">Chassis Number</th>
+                <th class="p-3">Fleet Operation Depot</th>
+                <th class="p-3">Action</th>
+              </tr>
+            </thead>
+            <tbody id="bus-list">
+              <!-- Bus list will be populated by JavaScript -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- SOP for Maintenance Page -->
+      <div id="sop-page" class="p-6 hidden">
+        <h2 class="text-2xl font-bold text-center mb-6">SOP for Maintenance</h2>
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <div id="sop-upload" class="mb-6">
+            <input type="file" id="sop-file" class="mb-3">
+            <button onclick="uploadSOP()" class="bg-green-600 text-white px-4 py-2 rounded-lg">Upload SOP</button>
+          </div>
+          <div id="sop-list">
+            <!-- SOP list will be populated by JavaScript -->
+          </div>
+          <div id="sop-view" class="mt-6 hidden">
+            <h3 class="text-xl font-semibold mb-4">File Content</h3>
+            <div id="sop-content" class="p-4 bg-gray-100 rounded-lg"></div>
+            <button onclick="closeView('sop')" class="mt-4 bg-gray-500 text-white px-4 py-2 rounded-lg">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Retro Summary Page -->
+      <div id="retro-page" class="p-6 hidden">
+        <h2 class="text-2xl font-bold text-center mb-6">Retrofitment Summary</h2>
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <div id="retro-upload" class="mb-6">
+            <input type="file" id="retro-file" class="mb-3">
+            <button onclick="uploadRetro()" class="bg-green-600 text-white px-4 py-2 rounded-lg">Upload Summary</button>
+          </div>
+          <div id="retro-list">
+            <!-- Retro list will be populated by JavaScript -->
+          </div>
+          <div id="retro-view" class="mt-6 hidden">
+            <h3 class="text-xl font-semibold mb-4">File Content</h3>
+            <div id="retro-content" class="p-4 bg-gray-100 rounded-lg"></div>
+            <button onclick="closeView('retro')" class="mt-4 bg-gray-500 text-white px-4 py-2 rounded-lg">Close</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Complaints Summary Page -->
+      <div id="complaints-page" class="p-6 hidden">
+        <h2 class="text-2xl font-bold text-center mb-6">Complaints Summary</h2>
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <div class="mb-6 flex items-center">
+            <label for="status-filter" class="mr-2 font-semibold">Filter by Status:</label>
+            <select id="status-filter" onchange="renderComplaintsSummary()" class="p-2 border rounded-lg">
+              <option value="all">All</option>
+              <option value="open">Open</option>
+              <option value="cleared">Cleared</option>
+            </select>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full bg-white shadow-md rounded-lg">
+              <thead>
+                <tr class="bg-green-600 text-white">
+                  <th class="p-3">Vehicle Registration Number</th>
+                  <th class="p-3">Fleet Operation Depot</th>
+                  <th class="p-3">Complaint</th>
+                  <th class="p-3">Date</th>
+                  <th class="p-3">Status</th>
+                  <th class="p-3">Action</th>
+                </tr>
+              </thead>
+              <tbody id="complaints-list">
+                <!-- Complaints list will be populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Odometer Summary Page -->
+      <div id="odometer-page" class="p-6 hidden">
+        <h2 class="text-2xl font-bold text-center mb-6">Odometer Summary</h2>
+        <div class="bg-white p-6 rounded-lg shadow-md">
+          <div class="mb-6 flex items-center">
+            <label for="time-filter" class="mr-2 font-semibold">Filter by Time Period:</label>
+            <select id="time-filter" onchange="renderOdometerSummary()" class="p-2 border rounded-lg">
+              <option value="all">All Time</option>
+              <option value="day">Day</option>
+              <option value="week">Week</option>
+              <option value="month">Month</option>
+            </select>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full bg-white shadow-md rounded-lg">
+              <thead>
+                <tr class="bg-green-600 text-white">
+                  <th class="p-3">Depot</th>
+                  <th class="p-3">Total Odometer (km)</th>
+                  <th class="p-3">Vehicle Count</th>
+                </tr>
+              </thead>
+              <tbody id="odometer-list">
+                <!-- Odometer summary will be populated by JavaScript -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vehicle Details Page -->
+      <div id="vehicle-details-page" class="p-6 hidden">
+        <h2 class="text-2xl font-bold text-center mb-6">Vehicle Details</h2>
+        <div class="bg-white p-6 rounded-lg shadow-md space-y-6">
+          <div>
+            <h3 class="text-xl font-semibold">Basic Information</h3>
+            <p>Chassis Number: <span id="chassis-no"></span></p>
+            <p>Registration Number: <span id="reg-no"></span></p>
+            <p>Motor Number: <span id="motor-no"></span></p>
+            <p>Dispatch Date: <span id="dispatch-date"></span></p>
+            <p>Date of Registration: <span id="reg-date"></span></p>
+            <p>Alloted Depot: <span id="depot"></span></p>
+            <p>Manufacturing Date: <span id="mfg-date"></span></p>
+            <p>Model: <span id="model"></span></p>
+            <p>Colour: <span id="colour"></span></p>
+            <p>Seating: <span id="seating"></span></p>
+            <p>Motor (kW): <span id="motor-kw"></span></p>
+          </div>
+          <div>
+            <h3 class="text-xl font-semibold">Warranty Details</h3>
+            <p id="warranty-details">Warranty: 2 years (Sample Data)</p>
+          </div>
+          <div>
+            <h3 class="text-xl font-semibold">Wheel Alignment Data</h3>
+            <p id="wheel-alignment">Last Alignment: 2024-10-15 (Sample Data)</p>
+          </div>
+          <div>
+            <h3 class="text-xl font-semibold">Complaint History</h3>
+            <div id="complaint-history"></div>
+            <div id="complaint-update" class="mt-4 flex items-center space-x-2">
+              <input id="new-complaint" type="text" placeholder="Add new complaint" class="p-2 border rounded-lg flex-1">
+              <select id="complaint-status" class="p-2 border rounded-lg">
+                <option value="open">Open</option>
+                <option value="cleared">Cleared</option>
+              </select>
+              <button onclick="addComplaint()" class="bg-green-600 text-white px-4 py-2 rounded-lg">Submit Complaint</button>
+            </div>
+          </div>
+          <div>
+            <h3 class="text-xl font-semibold">Odometer Reading</h3>
+            <div id="odometer-history"></div>
+            <div id="odometer-update" class="mt-4">
+              <input id="new-odometer" type="number" placeholder="Enter odometer reading" class="p-2 border rounded-lg">
+              <button onclick="addOdometer()" class="bg-green-600 text-white px-4 py-2 rounded-lg ml-2">Update Reading</button>
+            </div>
+          </div>
+          <button onclick="showPage('home')" class="bg-gray-500 text-white px-4 py-2 rounded-lg">Back to Home</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="text/javascript">
+    var gk_isXlsx = false;
+    var gk_xlsxFileLookup = {};
+    var gk_fileData = {};
+    function filledCell(cell) {
+      return cell !== '' && cell != null;
+    }
+    function loadFileData(filename) {
+      if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+        try {
+          var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+          var firstSheetName = workbook.SheetNames[0];
+          var worksheet = workbook.Sheets[firstSheetName];
+          var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+          var filteredData = jsonData.filter(row => row.some(filledCell));
+          var headerRowIndex = filteredData.findIndex((row, index) =>
+            row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+          );
+          if (headerRowIndex === -1 || headerRowIndex > 25) {
+            headerRowIndex = 0;
+          }
+          var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+          csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+          return csv;
+        } catch (e) {
+          console.error(e);
+          return "";
+        }
+      }
+      return gk_fileData[filename] || "";
+    }
+  </script>
+
+  <script defer>
+    // Simulated database using localStorage
+    const db = {
+      users: [
+        { username: "admin", password: "admin", role: "admin" },
+        { username: "upload", password: "upload", role: "upload" },
+        { username: "guest", password: "guest", role: "guest" }
+      ],
+      buses: [
+        { chassis: "ME9MEBA0001482144AH", reg: "KA51AL0087", motor: "EVC23A00009", dispatch: "30-04-2025",  regDate: "", depot: "Hyderbad", mfgDate: "31-12-2024", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0002482141AH", reg: "TN12BJ0822", motor: "EVC23A00006", dispatch: "18-12-2024", regDate: "", depot: "Bangalore", mfgDate: "31-12-2024", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0003482149AH", reg: "TN12BJ0855", motor: "EVC23A00007", dispatch: "12-12-2024", regDate: "", depot: "Bangalore", mfgDate: "31-12-2024", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0005482143AH", reg: "TN12BJ1285", motor: "EVC23A00005", dispatch: "06-12-2024", regDate: "", depot: "Bangalore", mfgDate: "31-12-2024", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0006482140AH", reg: "TN12BJ1281", motor: "EVC23A00012", dispatch: "02-12-2024", regDate: "", depot: "Bangalore", mfgDate: "31-12-2024", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0007482148AH", reg: "TN12BJ0841", motor: "EVC23A00011", dispatch: "20-12-2024", regDate: "", depot: "Bangalore", mfgDate: "31-12-2024", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0010482147AH", reg: "TN12BH8830", motor: "EVC23A00014", dispatch: "20-12-2024", regDate: "", depot: "Chennai", mfgDate: "31-12-2024", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0009482142AH", reg: "TN12BJ0876", motor: "EVC23A00013", dispatch: "25-12-2024", regDate: "", depot: "Chennai", mfgDate: "31-12-2024", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0008482145AH", reg: "TN12BJ5121", motor: "EVC23A00010", dispatch: "30-12-2024", regDate: "", depot: "Chennai", mfgDate: "31-12-2024", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0014482140AJ", reg: "TN12BH8840", motor: "EVC23A00008", dispatch: "27-12-2024", regDate: "", depot: "Chennai", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0015482146AJ", reg: "TN12BH8847", motor: "EVC24A00030", dispatch: "22-01-2025", regDate: "", depot: "Chennai", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0016482142AJ", reg: "TN12BH8877", motor: "EVC24A00033", dispatch: "25-01-2025", regDate: "", depot: "Chennai", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0017482149AJ", reg: "TN12BH8848", motor: "EVC24A00012", dispatch: "27-01-2025", regDate: "", depot: "Chennai", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0019482141AJ", reg: "TN12BJ0893", motor: "EVC24A00015", dispatch: "27-01-2025", regDate: "", depot: "Bangalore", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0020482141AJ", reg: "AP39WA3686", motor: "EVC24A00011", dispatch: "03-02-2025", regDate: "", depot: "Hyderbad", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0018482145AJ", reg: "AP39WA3687", motor: "EVC24A00002", dispatch: "03-02-2025", regDate: "", depot: "Hyderbad", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0021482148AJ", reg: "AP39WA3861", motor: "EVC24A00034", dispatch: "06-02-2025", regDate: "", depot: "Hyderbad", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0022482144AJ", reg: "AP39WA3859", motor: "EVC24A00032", dispatch: "15-02-2025", regDate: "", depot: "Hyderbad", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0023482140AJ", reg: "AP39WA3288", motor: "EVC24A00035", dispatch: "14-02-2025", regDate: "", depot: "Hyderbad", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0024482147AJ", reg: "AP39WA3298", motor: "EVC24A00036", dispatch: "20-02-2025", regDate: "", depot: "Hyderbad", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0025482143AJ", reg: "AP39WA4058", motor: "EVC24A00037", dispatch: "10-03-2025", regDate: "", depot: "Hyderbad", mfgDate: "01-01-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0026482140AL", reg: "AP39WA4285", motor: "EVC24A00014", dispatch: "11-03-2025", regDate: "", depot: "Hyderbad", mfgDate: "06-02-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0027482146AL", reg: "TN12BJ5157", motor: "EVC24A00008", dispatch: "18-03-2025", regDate: "", depot: "Bangalore", mfgDate: "06-02-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0028482142AL", reg: "TN12BJ5164", motor: "EVC24A00010", dispatch: "19-12-2024", regDate: "", depot: "Bangalore", mfgDate: "06-02-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0029482149AL", reg: "TN12BJ5177", motor: "EVC24A00021", dispatch: "26-03-2025", regDate: "", depot: "Bangalore", mfgDate: "06-02-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0030482149AL", reg: "TN12BJ5191", motor: "EVC24A00004", dispatch: "20-03-2025", regDate: "", depot: "Bangalore", mfgDate: "06-02-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0031482145AL", reg: "RJ14PG5945", motor: "EVC24A00019", dispatch: "01-04-2025", regDate: "", depot: "Ghaziabad", mfgDate: "06-02-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0032482141AL", reg: "KA51AL0084", motor: "EVC24A00020", dispatch: "02-04-2025", regDate: "", depot: "Hyderbad", mfgDate: "06-02-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0033482148AM", reg: "KA51AL0091", motor: "EVC24A00025", dispatch: "10-04-2025", regDate: "", depot: "Hyderbad", mfgDate: "18-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0034482144AM", reg: "KA51AL0085", motor: "EVC24A00023", dispatch: "05-04-2025", regDate: "", depot: "Hyderbad", mfgDate: "18-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0035482140AM", reg: "KA51AL0083", motor: "EVC24A00009", dispatch: "14-04-2025", regDate: "", depot: "Hyderbad", mfgDate: "18-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0036482147AM", reg: "RJ14PG6263", motor: "EVC24A00038", dispatch: "16-04-2025", regDate: "", depot: "Ghaziabad", mfgDate: "18-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0037482143AM", reg: "RJ14PG6265", motor: "EVC24A00028", dispatch: "29-06-2025", regDate: "", depot: "Ghaziabad", mfgDate: "18-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0038482140AM", reg: "RJ14PG6264", motor: "EVC24A00017", dispatch: "19-04-2025", regDate: "", depot: "Ghaziabad", mfgDate: "18-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0039482146BA", reg: "RJ14PG6897", motor: "EVC24A00024", dispatch: "29-04-2025", regDate: "", depot: "Ghaziabad", mfgDate: "19-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0040482146BA", reg: "KA51AL0090", motor: "EVC24A00022", dispatch: "28-04-2025", regDate: "", depot: "Hyderbad", mfgDate: "19-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0041482142BA", reg: "KA51AL0086", motor: "EVC24A00013", dispatch: "24-04-2025", regDate: "", depot: "Hyderbad", mfgDate: "19-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0042482149BA", reg: "TN12BK2650", motor: "EVC24A00016", dispatch: "03-05-2025", regDate: "", depot: "Chennai", mfgDate: "19-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0043482145BA", reg: "TN12BK2668", motor: "EVC24A00026", dispatch: "10-05-2025", regDate: "", depot: "Chennai", mfgDate: "19-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0044482141BA", reg: "KA51AL0088", motor: "EVC24A00003", dispatch: "25-04-2025", regDate: "", depot: "Hyderbad", mfgDate: "19-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9002", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0045482148BA", reg: "KA51AL0089", motor: "EVC24A00039", dispatch: "26-04-2025", regDate: "", depot: "Hyderbad", mfgDate: "19-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9003", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0046482144BA", reg: "RJ14PG6719", motor: "EVC24A00005", dispatch: "05-05-2025", regDate: "", depot: "Ghaziabad", mfgDate: "19-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9004", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0047482140BA", reg: "RJ14PG7115", motor: "EVC25A00001", dispatch: "26-05-2025", regDate: "", depot: "Ghaziabad", mfgDate: "19-03-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9005", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0048482147BB", reg: "TN12BK2602", motor: "EVC24A00018", dispatch: "10-05-2025", regDate: "", depot: "Chennai", mfgDate: "20-04-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9006", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0049482143BB", reg: "RJ14PG7238", motor: "EVC24A00007", dispatch: "29-05-2025", regDate: "", depot: "Ghaziabad", mfgDate: "20-04-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9007", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0050482143BB", reg: "RJ14PG6949", motor: "EVC24A00029", dispatch: "13-05-2025", regDate: "", depot: "Ghaziabad", mfgDate: "20-04-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9008", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0051482140BB", reg: "RJ14PG7239", motor: "EVC25A00002", dispatch: "30-05-2025", regDate: "", depot: "Ghaziabad", mfgDate: "20-04-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9009", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0052482146BB", reg: "RJ14PG7301", motor: "EVB25A00003", dispatch: "01-06-2025", regDate: "", depot: "Ghaziabad", mfgDate: "20-04-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9010", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0053482142BB", reg: "RJ14PG7919", motor: "EVB24A00040", dispatch: "22-06-2025", regDate: "", depot: "Ghaziabad", mfgDate: "20-04-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9011", seating: "36+D", motorKw: "334KW" },
+        { chassis: "ME9MEBA0054482149BB", reg: "Pending", motor: "EVB25A00004", dispatch: "07-07-2025", regDate: "", depot: "Ghaziabad", mfgDate: "20-04-2025", model: "Veera 13.5 M EV coach - Mahasamrat EV", colour: "Silver-9012", seating: "36+D", motorKw: "334KW" }
+      ]
+    };
+
+    let currentUser = null;
+    let currentVehicle = null;
+
+    // Function to get the registration state from the registration number
+    function getRegistrationState(reg) {
+      if (reg === "Pending") return "N/A";
+      const stateCode = reg.substring(0, 2);
+      const stateMap = {
+        "KA": "Karnataka",
+        "TN": "Tamil Nadu",
+        "AP": "Andhra Pradesh",
+        "RJ": "Rajasthan"
+      };
+      return stateMap[stateCode] || "Unknown";
+    }
+
+    // Migrate existing complaints to include status
+    function migrateComplaints() {
+      const complaints = JSON.parse(localStorage.getItem("complaints") || "{}");
+      let updated = false;
+      for (const chassis in complaints) {
+        complaints[chassis] = complaints[chassis].map(complaint => {
+          if (!complaint.status) {
+            updated = true;
+            return { ...complaint, status: "open" };
+          }
+          return complaint;
+        });
+      }
+      if (updated) {
+        localStorage.setItem("complaints", JSON.stringify(complaints));
+      }
+    }
+
+    // Initialize app
+    function init() {
+      if (localStorage.getItem("sopFiles")) {
+        renderSOPList();
+      }
+      if (localStorage.getItem("retroFiles")) {
+        renderRetroList();
+      }
+      if (localStorage.getItem("complaints")) {
+        migrateComplaints();
+        renderComplaintHistory();
+        renderComplaintsSummary();
+      }
+      if (localStorage.getItem("odometer")) {
+        renderOdometerHistory();
+        renderOdometerSummary();
+      }
+      renderBusList();
+    }
+
+    // Login function
+    function login() {
+      const username = document.getElementById("username").value;
+      const password = document.getElementById("password").value;
+      const user = db.users.find(u => u.username === username && u.password === password);
+      if (user) {
+        currentUser = user;
+        document.getElementById("login-page").classList.add("hidden");
+        document.getElementById("main-app").classList.remove("hidden");
+        init();
+        if (user.role === "guest") {
+          document.getElementById("sop-upload").classList.add("hidden");
+          document.getElementById("retro-upload").classList.add("hidden");
+          document.getElementById("complaint-update").classList.add("hidden");
+          document.getElementById("odometer-update").classList.add("hidden");
+        } else if (user.role === "upload") {
+          document.getElementById("complaint-update").classList.add("hidden");
+          document.getElementById("odometer-update").classList.add("hidden");
+        }
+      } else {
+        alert("Invalid credentials");
+      }
+    }
+
+    // Logout function
+    function logout() {
+      currentUser = null;
+      document.getElementById("main-app").classList.add("hidden");
+      document.getElementById("login-page").classList.remove("hidden");
+    }
+
+    // Show specific page
+    function showPage(page) {
+      document.querySelectorAll("#main-app > div:not(:first-child):not(:nth-child(2))").forEach(div => div.classList.add("hidden"));
+      document.getElementById(`${page}-page`).classList.remove("hidden");
+      if (page === 'sop') renderSOPList();
+      if (page === 'retro') renderRetroList();
+    }
+
+    // Render bus list
+    function renderBusList() {
+      const busList = document.getElementById("bus-list");
+      busList.innerHTML = "";
+      db.buses.forEach(bus => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td class="p-3 border">${bus.reg}</td>
+          <td class="p-3 border">${getRegistrationState(bus.reg)}</td>
+          <td class="p-3 border">${bus.chassis}</td>
+          <td class="p-3 border">${bus.depot}</td>
+          <td class="p-3 border">
+            <button onclick="viewDetails('${bus.chassis}')" class="bg-blue-500 text-white px-3 py-1 rounded-lg">View Details</button>
+          </td>
+        `;
+        busList.appendChild(row);
+      });
+    }
+
+    // View vehicle details
+    function viewDetails(chassis) {
+      currentVehicle = db.buses.find(bus => bus.chassis === chassis);
+      showPage("vehicle-details");
+      document.getElementById("chassis-no").textContent = currentVehicle.chassis;
+      document.getElementById("reg-no").textContent = currentVehicle.reg;
+      document.getElementById("motor-no").textContent = currentVehicle.motor;
+      document.getElementById("dispatch-date").textContent = currentVehicle.dispatch;
+      document.getElementById("reg-date").textContent = currentVehicle.regDate;
+      document.getElementById("depot").textContent = currentVehicle.depot;
+      document.getElementById("mfg-date").textContent = currentVehicle.mfgDate;
+      document.getElementById("model").textContent = currentVehicle.model;
+      document.getElementById("colour").textContent = currentVehicle.colour;
+      document.getElementById("seating").textContent = currentVehicle.seating;
+      document.getElementById("motor-kw").textContent = currentVehicle.motorKw;
+      renderComplaintHistory();
+      renderOdometerHistory();
+    }
+
+    // Add complaint
+    function addComplaint() {
+      if (currentUser.role !== "admin") return;
+      const complaintText = document.getElementById("new-complaint").value;
+      const complaintStatus = document.getElementById("complaint-status").value;
+      if (complaintText) {
+        const complaints = JSON.parse(localStorage.getItem("complaints") || "{}");
+        if (!complaints[currentVehicle.chassis]) complaints[currentVehicle.chassis] = [];
+        complaints[currentVehicle.chassis].push({ 
+          text: complaintText, 
+          date: new Date().toISOString(), 
+          status: complaintStatus 
+        });
+        localStorage.setItem("complaints", JSON.stringify(complaints));
+        renderComplaintHistory();
+        renderComplaintsSummary();
+        document.getElementById("new-complaint").value = "";
+      }
+    }
+
+    // Close complaint
+    function closeComplaint(chassis, index) {
+      if (currentUser.role !== "admin") return;
+      const complaints = JSON.parse(localStorage.getItem("complaints") || "{}");
+      if (complaints[chassis] && complaints[chassis][index]) {
+        complaints[chassis][index].status = "cleared";
+        localStorage.setItem("complaints", JSON.stringify(complaints));
+        renderComplaintsSummary();
+        renderComplaintHistory();
+      }
+    }
+
+    // Render complaint history on Vehicle Details page
+    function renderComplaintHistory() {
+      const complaintHistory = document.getElementById("complaint-history");
+      const complaints = JSON.parse(localStorage.getItem("complaints") || "{}");
+      const vehicleComplaints = complaints[currentVehicle?.chassis] || [];
+      complaintHistory.innerHTML = "";
+      if (vehicleComplaints.length === 0) {
+        complaintHistory.innerHTML = "<p>No complaints recorded.</p>";
+      } else {
+        vehicleComplaints.forEach(c => {
+          const status = c.status || "open";
+          complaintHistory.innerHTML += `<p>${c.text} (Date: ${new Date(c.date).toLocaleDateString()}, Status: ${status.charAt(0).toUpperCase() + status.slice(1)})</p>`;
+        });
+      }
+    }
+
+    // Render complaints summary on Complaints Summary page
+    function renderComplaintsSummary() {
+      const complaintsList = document.getElementById("complaints-list");
+      const filter = document.getElementById("status-filter").value;
+      const complaints = JSON.parse(localStorage.getItem("complaints") || "{}");
+      complaintsList.innerHTML = "";
+
+      let allComplaints = [];
+      for (const chassis in complaints) {
+        const vehicle = db.buses.find(bus => bus.chassis === chassis);
+        if (!vehicle) continue;
+        complaints[chassis].forEach((complaint, index) => {
+          const status = complaint.status || "open";
+          allComplaints.push({ chassis, complaint: { ...complaint, status }, index, reg: vehicle.reg, depot: vehicle.depot });
+        });
+      }
+
+      allComplaints = allComplaints.filter(c => filter === "all" || c.complaint.status === filter);
+
+      if (allComplaints.length === 0) {
+        complaintsList.innerHTML = "<tr><td colspan='6' class='p-3 border text-center'>No complaints found.</td></tr>";
+      } else {
+        allComplaints.forEach(({ chassis, complaint, index, reg, depot }) => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td class="p-3 border">${reg}</td>
+            <td class="p-3 border">${depot}</td>
+            <td class="p-3 border">${complaint.text}</td>
+            <td class="p-3 border">${new Date(complaint.date).toLocaleDateString()}</td>
+            <td class="p-3 border">
+              <span class="${complaint.status === 'open' ? 'text-red-500' : 'text-green-500'}">
+                ${complaint.status.charAt(0).toUpperCase() + complaint.status.slice(1)}
+              </span>
+            </td>
+            <td class="p-3 border">
+              ${complaint.status === 'open' && currentUser.role === 'admin' ? 
+                `<button onclick="closeComplaint('${chassis}', ${index})" class="bg-yellow-500 text-white px-3 py-1 rounded-lg">Close</button>` : 
+                complaint.status === 'cleared' ? 'Locked' : ''}
+            </td>
+          `;
+          complaintsList.appendChild(row);
+        });
+      }
+    }
+
+    // Upload SOP
+    function uploadSOP() {
+      if (currentUser.role === "guest") return;
+      const fileInput = document.getElementById("sop-file");
+      if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const sopFiles = JSON.parse(localStorage.getItem("sopFiles") || "[]");
+          sopFiles.push({
+            name: file.name,
+            date: new Date().toISOString(),
+            content: e.target.result,
+            type: file.type
+          });
+          localStorage.setItem("sopFiles", JSON.stringify(sopFiles));
+          renderSOPList();
+          fileInput.value = ""; // Clear the input
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    // Render SOP list
+    function renderSOPList() {
+      const sopList = document.getElementById("sop-list");
+      const sopFiles = JSON.parse(localStorage.getItem("sopFiles") || "[]");
+      sopList.innerHTML = "<h3 class='text-xl font-semibold mb-4'>Uploaded SOPs</h3>";
+      if (sopFiles.length === 0) {
+        sopList.innerHTML += "<p>No SOPs uploaded yet.</p>";
+      } else {
+        sopFiles.forEach((file, index) => {
+          sopList.innerHTML += `
+            <div class="flex items-center justify-between p-2 border-b">
+              <p>${file.name} (Uploaded: ${new Date(file.date).toLocaleDateString()})</p>
+              <div>
+                <button onclick="viewFile('sop', ${index})" class="bg-blue-500 text-white px-3 py-1 rounded-lg mr-2">View</button>
+                <button onclick="downloadFile('sop', ${index})" class="bg-green-500 text-white px-3 py-1 rounded-lg">Download</button>
+              </div>
+            </div>
+          `;
+        });
+      }
+    }
+
+    // Upload Retro Summary
+    function uploadRetro() {
+      if (currentUser.role === "guest") return;
+      const fileInput = document.getElementById("retro-file");
+      if (fileInput.files.length > 0) {
+        const file = fileInput.files[0];
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          const retroFiles = JSON.parse(localStorage.getItem("retroFiles") || "[]");
+          retroFiles.push({
+            name: file.name,
+            date: new Date().toISOString(),
+            content: e.target.result,
+            type: file.type
+          });
+          localStorage.setItem("retroFiles", JSON.stringify(retroFiles));
+          renderRetroList();
+          fileInput.value = ""; // Clear the input
+        };
+        reader.readAsDataURL(file);
+      }
+    }
+
+    // Render Retro list
+    function renderRetroList() {
+      const retroList = document.getElementById("retro-list");
+      const retroFiles = JSON.parse(localStorage.getItem("retroFiles") || "[]");
+      retroList.innerHTML = "<h3 class='text-xl font-semibold mb-4'>Uploaded Summaries</h3>";
+      if (retroFiles.length === 0) {
+        retroList.innerHTML += "<p>No summaries uploaded yet.</p>";
+      } else {
+        retroFiles.forEach((file, index) => {
+          retroList.innerHTML += `
+            <div class="flex items-center justify-between p-2 border-b">
+              <p>${file.name} (Uploaded: ${new Date(file.date).toLocaleDateString()})</p>
+              <div>
+                <button onclick="viewFile('retro', ${index})" class="bg-blue-500 text-white px-3 py-1 rounded-lg mr-2">View</button>
+                <button onclick="downloadFile('retro', ${index})" class="bg-green-500 text-white px-3 py-1 rounded-lg">Download</button>
+              </div>
+            </div>
+          `;
+        });
+      }
+    }
+
+    // View file content
+    function viewFile(type, index) {
+      const files = JSON.parse(localStorage.getItem(`${type}Files`) || "[]");
+      const file = files[index];
+      const contentDiv = document.getElementById(`${type}-content`);
+      const viewDiv = document.getElementById(`${type}-view`);
+
+      if (!file) {
+        contentDiv.innerHTML = "<p>Error: File not found.</p>";
+        viewDiv.classList.remove("hidden");
+        return;
+      }
+
+      const mimeType = file.type || 'application/octet-stream';
+      const data = file.content.split(',')[1]; // Remove data URI prefix
+      const decodedData = atob(data);
+
+      if (mimeType.startsWith('text/') || mimeType === 'text/csv') {
+        contentDiv.textContent = decodedData;
+      } else if (mimeType === 'application/pdf') {
+        const pdfData = `data:application/pdf;base64,${data}`;
+        contentDiv.innerHTML = `<iframe src="${pdfData}" class="w-full h-96"></iframe>`;
+      } else {
+        contentDiv.innerHTML = `<p>Preview not available for this file type. Please download to view.</p>`;
+      }
+
+      viewDiv.classList.remove("hidden");
+    }
+
+    // Close file view
+    function closeView(type) {
+      document.getElementById(`${type}-view`).classList.add("hidden");
+      document.getElementById(`${type}-content`).innerHTML = "";
+    }
+
+    // Download file
+    function downloadFile(type, index) {
+      const files = JSON.parse(localStorage.getItem(`${type}Files`) || "[]");
+      const file = files[index];
+
+      if (!file) {
+        alert("Error: File not found.");
+        return;
+      }
+
+      const link = document.createElement('a');
+      link.href = file.content;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Add odometer reading
+    function addOdometer() {
+      if (currentUser.role !== "admin") return;
+      const reading = document.getElementById("new-odometer").value;
+      if (reading) {
+        const odometer = JSON.parse(localStorage.getItem("odometer") || "{}");
+        if (!odometer[currentVehicle.chassis]) odometer[currentVehicle.chassis] = [];
+        odometer[currentVehicle.chassis].push({ value: reading, date: new Date().toISOString() });
+        localStorage.setItem("odometer", JSON.stringify(odometer));
+        renderOdometerHistory();
+        renderOdometerSummary();
+        document.getElementById("new-odometer").value = "";
+      }
+    }
+
+    // Render odometer history
+    function renderOdometerHistory() {
+      const odometerHistory = document.getElementById("odometer-history");
+      const odometer = JSON.parse(localStorage.getItem("odometer") || "{}");
+      const vehicleOdometer = odometer[currentVehicle?.chassis] || [];
+      odometerHistory.innerHTML = "";
+      if (vehicleOdometer.length === 0) {
+        odometerHistory.innerHTML = "<p>No odometer readings recorded.</p>";
+      } else {
+        vehicleOdometer.forEach(r => {
+          odometerHistory.innerHTML += `<p>${r.value} km (Date: ${new Date(r.date).toLocaleDateString()})</p>`;
+        });
+      }
+    }
+
+    // Render odometer summary on Odometer Summary page
+    function renderOdometerSummary() {
+      const odometerList = document.getElementById("odometer-list");
+      const filter = document.getElementById("time-filter")?.value || "all";
+      const odometer = JSON.parse(localStorage.getItem("odometer") || "{}");
+      odometerList.innerHTML = "";
+
+      const depots = [...new Set(db.buses.map(bus => bus.depot))];
+      const summary = {};
+
+      depots.forEach(depot => {
+        summary[depot] = { total: 0, vehicleCount: 0 };
+      });
+
+      for (const chassis in odometer) {
+        const vehicle = db.buses.find(bus => bus.chassis === chassis);
+        if (!vehicle) continue;
+        const readings = odometer[chassis];
+
+        readings.forEach(reading => {
+          const readingDate = new Date(reading.date);
+          const currentDate = new Date();
+          let include = false;
+
+          switch (filter) {
+            case "day":
+              include = readingDate.toDateString() === currentDate.toDateString();
+              break;
+            case "week":
+              const weekStart = new Date(currentDate);
+              weekStart.setDate(currentDate.getDate() - currentDate.getDay());
+              const weekEnd = new Date(weekStart);
+              weekEnd.setDate(weekStart.getDate() + 6);
+              include = readingDate >= weekStart && readingDate <= weekEnd;
+              break;
+            case "month":
+              include = readingDate.getMonth() === currentDate.getMonth() &&
+                        readingDate.getFullYear() === currentDate.getFullYear();
+              break;
+            case "all":
+            default:
+              include = true;
+              break;
+          }
+
+          if (include) {
+            summary[vehicle.depot].total += parseFloat(reading.value) || 0;
+            summary[vehicle.depot].vehicleCount += 1;
+          }
+        });
+      }
+
+      if (Object.keys(summary).length === 0 || Object.values(summary).every(s => s.vehicleCount === 0)) {
+        odometerList.innerHTML = "<tr><td colspan='3' class='p-3 border text-center'>No odometer readings found.</td></tr>";
+      } else {
+        depots.forEach(depot => {
+          if (summary[depot].vehicleCount > 0) {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+              <td class="p-3 border">${depot}</td>
+              <td class="p-3 border">${summary[depot].total.toFixed(2)} km</td>
+              <td class="p-3 border">${summary[depot].vehicleCount}</td>
+            `;
+            odometerList.appendChild(row);
+          }
+        });
+      }
+    }
+  </script>
+</body>
+</html>
